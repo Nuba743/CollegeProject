@@ -1,5 +1,5 @@
 
-import { useState,useEffect } from "react";
+import { useState,useEffect, useRef } from "react";
 import {
   LayoutDashboard,
   BookOpen,
@@ -22,11 +22,14 @@ import {
 import Assessment from "./Assessment"
 import AITutor from "./AITutor";
 import Auth from "./Auth";
+import { lessonContentData } from "./lessonContent";
 import { generateRecommendations } from "./recommendationEngine";
 import { generateLearningPath } from "./learningPathEngine";
 
 function App() {
-
+const [studyHours, setStudyHours] = useState(
+  Number(localStorage.getItem("studyHours")) || 0
+);
   const [studentName, setStudentName] = useState(
   localStorage.getItem("studentName") || "Alex"
 );
@@ -44,8 +47,52 @@ const [isAuthenticated, setIsAuthenticated] = useState(
   localStorage.getItem("activePage") || "Dashboard"
 );
 
-const [selectedCourse, setSelectedCourse] = useState(null);
+const [selectedCourse, setSelectedCourse] = useState(
+  localStorage.getItem("selectedCourse") || null
+);
+const [assessmentCourse, setAssessmentCourse] = useState(
+  localStorage.getItem("activeAssessmentCourse") || null
+);
+const [selectedLesson, setSelectedLesson] = useState(() => {
+  try {
+    return JSON.parse(localStorage.getItem("selectedLesson")) || null;
+  } catch {
+    return null;
+  }
+});
 
+const [lessonContentOpen, setLessonContentOpen] = useState(
+  localStorage.getItem("lessonContentOpen") === "true"
+);
+const lessonContentRef = useRef(null);
+useEffect(() => {
+  localStorage.setItem("activePage", activePage);
+
+  if (selectedCourse) {
+    localStorage.setItem("selectedCourse", selectedCourse);
+  }
+
+  if (selectedLesson) {
+    localStorage.setItem("selectedLesson", JSON.stringify(selectedLesson));
+  } else {
+    localStorage.removeItem("selectedLesson");
+  }
+
+  localStorage.setItem(
+    "lessonContentOpen",
+    String(lessonContentOpen)
+  );
+}, [activePage, selectedCourse, selectedLesson, lessonContentOpen]);
+useEffect(() => {
+  if (lessonContentOpen && selectedLesson) {
+    requestAnimationFrame(() => {
+      lessonContentRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }
+}, [lessonContentOpen, selectedLesson]);
 const [completedLessons, setCompletedLessons] = useState(() => {
   try {
     return JSON.parse(
@@ -200,6 +247,14 @@ const averageScore =
       )
     : 0;
 
+const recentAssessmentTrend = [...assessmentHistory]
+  .filter((record) => typeof record.percentage === "number")
+  .sort(
+    (a, b) =>
+      new Date(a.completedAt) - new Date(b.completedAt)
+  )
+  .slice(-7);
+
   const navigation = [
     { name: "Dashboard", icon: LayoutDashboard },
     { name: "My Courses", icon: BookOpen },
@@ -208,32 +263,44 @@ const averageScore =
     { name: "My Progress", icon: ChartNoAxesColumnIncreasing },
   ];
 
-  const courses = [
-    {
-      title: "JavaScript Fundamentals",
-      category: "Programming",
-      progress: 75,
-      color: "bg-violet-500",
-      icon: "JS",
-      bg: "bg-violet-100",
-    },
-    {
-      title: "React Development",
-      category: "Web Development",
-      progress: 45,
-      color: "bg-blue-500",
-      icon: "RE",
-      bg: "bg-blue-100",
-    },
-    {
-      title: "Data Structures",
-      category: "Computer Science",
-      progress: 30,
-      color: "bg-emerald-500",
-      icon: "DS",
-      bg: "bg-emerald-100",
-    },
-  ];
+  
+
+const courses = [
+  {
+    title: "HTML Fundamentals",
+    courseName: "HTML Fundamentals",
+    category: "Web Development",
+    color: "bg-orange-500",
+    icon: "HTML",
+    bg: "bg-orange-100",
+  },
+  {
+    title: "CSS Fundamentals",
+    courseName: "CSS Fundamentals",
+    category: "Web Design",
+    color: "bg-blue-500",
+    icon: "CSS",
+    bg: "bg-blue-100",
+  },
+  {
+    title: "JavaScript Fundamentals",
+    courseName: "JavaScript",
+    category: "Programming",
+    color: "bg-violet-500",
+    icon: "JS",
+    bg: "bg-violet-100",
+  },
+  {
+    title: "React Development",
+    courseName: "React Development",
+    category: "Frontend Development",
+    color: "bg-emerald-500",
+    icon: "RE",
+    bg: "bg-emerald-100",
+  },
+];
+
+
 
   const courseDetails = {
   "HTML Fundamentals": [
@@ -541,7 +608,8 @@ const averageScore =
     {studentName.charAt(0).toUpperCase()}
   </button>
 
-  <div className="absolute right-0 top-12 z-50 hidden w-48 rounded-xl border bg-white p-2 shadow-lg group-hover:block">
+  <div className="absolute right-0 top-full z-50 hidden w-48 pt-2 group-hover:block">
+  <div className="rounded-xl border bg-white p-2 shadow-lg">
     <p className="px-3 py-2 text-sm font-semibold">
       {studentName}
     </p>
@@ -562,10 +630,10 @@ const averageScore =
   </div>
 </div>
             </div>
-
+</div>
           </header>
           {activePage === "Assessment" ? (
-  <Assessment />
+  <Assessment selectedCourse={assessmentCourse} />
 
   ) : activePage === "AI Tutor" ? (
   <AITutor />
@@ -598,6 +666,32 @@ const averageScore =
           style={{ width: `${getCourseProgress(selectedCourse)}%` }}
         />
       </div>
+
+
+<div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
+  <div className="rounded-xl bg-green-50 p-4">
+    <p className="text-sm text-green-700">Completed</p>
+    <h3 className="text-2xl font-bold text-green-700">
+      {(completedLessons[selectedCourse] || []).length}
+    </h3>
+  </div>
+
+  <div className="rounded-xl bg-orange-50 p-4">
+    <p className="text-sm text-orange-700">Remaining</p>
+    <h3 className="text-2xl font-bold text-orange-700">
+      {courseDetails[selectedCourse].length -
+        (completedLessons[selectedCourse] || []).length}
+    </h3>
+  </div>
+
+  <div className="rounded-xl bg-violet-50 p-4">
+    <p className="text-sm text-violet-700">Total Lessons</p>
+    <h3 className="text-2xl font-bold text-violet-700">
+      {courseDetails[selectedCourse].length}
+    </h3>
+  </div>
+</div>
+
     </section>
 
     <section className="rounded-2xl border bg-white p-6">
@@ -605,10 +699,18 @@ const averageScore =
 
       <div className="space-y-4">
         {courseDetails[selectedCourse].map((lesson, index) => (
-          <label
-            key={lesson}
-            className="flex cursor-pointer items-center gap-4 rounded-xl border p-4 hover:bg-violet-50"
-          >
+          <div
+  key={lesson}
+  onClick={() => {
+  setSelectedLesson(lesson);
+  setLessonContentOpen(true);
+}}
+  className={`flex cursor-pointer items-center gap-4 rounded-xl border p-4 transition ${
+  (completedLessons[selectedCourse] || []).includes(lesson)
+    ? "bg-green-50 border-green-300"
+    : "bg-white hover:bg-violet-50"
+}`}
+>
             <input
               type="checkbox"
               checked={(completedLessons[selectedCourse] || []).includes(lesson)}
@@ -619,10 +721,130 @@ const averageScore =
             <span className="font-medium">
               {index + 1}. {lesson}
             </span>
-          </label>
+          </div>
         ))}
       </div>
+
+      <div className="rounded-2xl border bg-white p-6 mt-6">
+  <h3 className="text-lg font-bold">
+    Test Your Knowledge
+  </h3>
+
+  <p className="mt-2 text-slate-500">
+    Complete an assessment to evaluate your understanding.
+  </p>
+
+  <button
+    
+  onClick={() => {
+  localStorage.removeItem(
+    `adaptiveLearningProgress_${selectedCourse}`
+  );
+
+  setAssessmentCourse(selectedCourse);
+  localStorage.setItem("activeAssessmentCourse", selectedCourse);
+  setSelectedCourse(null);
+  setSelectedLesson(null);
+  setLessonContentOpen(false);
+  setActivePage("Assessment");
+}}
+    className="mt-4 rounded-xl bg-violet-600 px-6 py-3 text-white font-semibold hover:bg-violet-700 transition"
+  >
+    Start Assessment →
+  </button>
+</div>
     </section>
+    
+{lessonContentOpen && selectedLesson && (
+  <section
+  ref={lessonContentRef}
+  className="rounded-2xl border bg-white p-6 space-y-6"
+>
+    <div>
+      <button
+        onClick={() => setLessonContentOpen(false)}
+        className="mb-4 text-violet-600 font-semibold"
+      >
+        ← Back to Lessons
+      </button>
+
+      <h2 className="text-2xl font-bold text-slate-800">
+        {lessonContentData[selectedLesson]?.heading || selectedLesson}
+      </h2>
+    </div>
+
+    {lessonContentData[selectedLesson]?.sections?.map((section, index) => (
+      <div key={index}>
+        <h3 className="text-lg font-bold mb-2">{section.title}</h3>
+        <p className="text-slate-600 leading-7">{section.content}</p>
+      </div>
+    ))}
+
+    {lessonContentData[selectedLesson]?.code && (
+      <div>
+        <h3 className="font-bold mb-3">Practical Example</h3>
+        <pre className="bg-slate-900 text-green-300 p-4 rounded-xl overflow-x-auto text-sm">
+          <code>{lessonContentData[selectedLesson].code}</code>
+        </pre>
+      </div>
+    )}
+
+    
+<button
+  onClick={() => {
+    toggleLessonComplete(selectedCourse, selectedLesson);
+  }}
+  className={`rounded-xl px-5 py-3 font-semibold transition-all duration-300 flex items-center gap-2 ${
+    (completedLessons[selectedCourse] || []).includes(selectedLesson)
+      ? "bg-green-100 text-green-700 border border-green-300"
+      : "bg-violet-600 text-white hover:bg-violet-700 hover:scale-105"
+  }`}
+>
+  {(completedLessons[selectedCourse] || []).includes(selectedLesson) ? (
+    <>
+      <span>✓</span>
+      Completed
+    </>
+  ) : (
+    <>
+      <span>✓</span>
+      Mark Complete
+    </>
+  )}
+</button>
+
+
+    <div className="flex justify-between gap-3">
+  <button
+    disabled={courseDetails[selectedCourse].indexOf(selectedLesson) === 0}
+    onClick={() => {
+      const lessons = courseDetails[selectedCourse];
+      const index = lessons.indexOf(selectedLesson);
+      setSelectedLesson(lessons[index - 1]);
+    }}
+    className="rounded-xl border px-5 py-3 disabled:opacity-40"
+  >
+    ← Previous
+  </button>
+
+  <button
+    disabled={
+      courseDetails[selectedCourse].indexOf(selectedLesson) ===
+      courseDetails[selectedCourse].length - 1
+    }
+    onClick={() => {
+      const lessons = courseDetails[selectedCourse];
+      const index = lessons.indexOf(selectedLesson);
+      setSelectedLesson(lessons[index + 1]);
+    }}
+    className="rounded-xl bg-violet-600 px-5 py-3 text-white disabled:opacity-40"
+  >
+    Next →
+  </button>
+</div>
+  </section>
+)}
+
   </div>
 ) : activePage === "My Courses" ? (
   <div className="space-y-6">
@@ -634,29 +856,34 @@ const averageScore =
     </div>
 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-      {[
-        { name: "HTML Fundamentals", progress: 100 },
-        { name: "CSS Fundamentals", progress: 75 },
-        { name: "JavaScript", progress: 60 },
-        { name: "React Development", progress: 40 },
-      ].map((course) => (
+      
+{Object.keys(courseDetails).map((courseName) => {
+  const progress = getCourseProgress(courseName);
+
+  return (
+    <div
+      key={courseName}
+      onClick={() => {
+        setActivePage("My Courses");
+        setSelectedCourse(courseName);
+      }}
+      className="bg-white border rounded-2xl p-6 cursor-pointer hover:shadow-lg hover:border-violet-400 transition"
+    >
+      <h3 className="font-bold text-lg">{courseName}</h3>
+      <p className="text-sm text-slate-500 mt-3">
+        {progress}% completed
+      </p>
+      <div className="w-full bg-slate-100 rounded-full h-2 mt-3">
         <div
-  key={course.name}
-  onClick={() => setSelectedCourse(course.name)}
-  className="bg-white border rounded-2xl p-6 cursor-pointer hover:shadow-lg hover:border-violet-400 transition"
->
-          <h3 className="font-bold text-lg">{course.name}</h3>
-          <p className="text-sm text-slate-500 mt-3">
-            {course.progress}% completed
-          </p>
-          <div className="w-full bg-slate-100 rounded-full h-2 mt-3">
-            <div
-              className="bg-violet-600 h-2 rounded-full"
-              style={{ width: `${course.progress}%` }}
-            />
-          </div>
-        </div>
-      ))}
+          className="bg-violet-600 h-2 rounded-full transition-all"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </div>
+  );
+})}
+
+        
     </div>
   </div>
 ) : activePage === "My Progress" ? (
@@ -756,6 +983,49 @@ const averageScore =
 
 </section>
 
+{/* Assessment Performance Trend */}
+<section className="bg-white rounded-2xl border p-6">
+  <h3 className="text-lg font-bold mb-2">
+    Assessment Performance Trend
+  </h3>
+
+  <p className="text-sm text-slate-500 mb-6">
+    Your scores across the last 7 assessments.
+  </p>
+
+  {recentAssessmentTrend.length === 0 ? (
+    <p className="text-sm text-slate-500">
+      Complete assessments to see your performance trend.
+    </p>
+  ) : (
+    <div className="flex items-end gap-3 h-56 border-b border-slate-200 pb-2">
+      {recentAssessmentTrend.map((record, index) => (
+        <div
+          key={record.id}
+          className="flex-1 h-full flex flex-col items-center justify-end gap-2"
+        >
+          <span className="text-xs font-semibold text-violet-600">
+            {record.percentage}%
+          </span>
+
+          <div
+            className="w-full max-w-12 rounded-t-lg bg-violet-500 hover:bg-violet-700 transition-all"
+            style={{
+              height: `${Math.max(record.percentage, 3)}%`,
+            }}
+            title={`Assessment ${index + 1}: ${record.percentage}%`}
+          />
+
+          <span className="text-xs text-slate-500">
+            {index + 1}
+          </span>
+        </div>
+      ))}
+    </div>
+  )}
+</section>
+
+
 {/* Personalized Learning Path */}
 <section className="bg-white rounded-2xl border p-6">
 
@@ -776,9 +1046,26 @@ const averageScore =
 
       {learningPath.map((item) => (
         <div
-          key={item.topic}
-          className="flex gap-4 border-b border-slate-100 pb-5 last:border-0"
-        >
+  key={item.topic}
+  onClick={() => {
+  const courseMap = {
+    HTML: "HTML Fundamentals",
+    CSS: "CSS Fundamentals",
+    JavaScript: "JavaScript",
+    React: "React Development",
+  };
+
+  const courseKey = courseMap[item.topic];
+
+  if (!courseKey || !courseDetails[courseKey]) return;
+
+  setSelectedCourse(courseKey);
+  setSelectedLesson(null);
+  setLessonContentOpen(false);
+  setActivePage("My Courses");
+}}
+  className="flex gap-4 border-b border-slate-100 pb-5 last:border-0 cursor-pointer hover:bg-violet-50 rounded-lg transition-all"
+>
 
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 font-bold text-violet-700">
             {item.step}
@@ -964,14 +1251,17 @@ const averageScore =
             {[
               {
                 title: "Enrolled Courses",
-                value: "06",
+                value: Object.keys(courseDetails).length,
                 icon: BookOpen,
                 color: "text-blue-600",
                 bg: "bg-blue-50",
               },
               {
                 title: "Completed Lessons",
-                value: "24",
+value: Object.values(completedLessons).reduce(
+  (total, lessons) => total + lessons.length,
+  0
+),
                 icon: ClipboardCheck,
                 color: "text-emerald-600",
                 bg: "bg-emerald-50",
@@ -984,8 +1274,8 @@ const averageScore =
                 bg: "bg-violet-50",
               },
               {
-                title: "Learning Streak",
-                value: "07 Days",
+                title: "Assessments Taken",
+value: completedAssessments,
                 icon: Flame,
                 color: "text-orange-600",
                 bg: "bg-orange-50",
@@ -1038,7 +1328,10 @@ const averageScore =
 
               <div className="space-y-4">
 
-                {courses.map((course) => (
+                {courses.map((course) => {
+  const progress = getCourseProgress(course.courseName);
+
+  return (
                   <div
                     key={course.title}
                     className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:flex-row sm:items-center"
@@ -1060,27 +1353,31 @@ const averageScore =
                           Course Progress
                         </span>
                         <span className="font-semibold">
-                          {course.progress}%
+                          {progress}%
                         </span>
                       </div>
 
                       <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
                         <div
                           className={`h-full rounded-full ${course.color}`}
-                          style={{ width: `${course.progress}%` }}
+                          style={{ width: `${progress}%` }}
                         />
                       </div>
                     </div>
 
                     <button
-                      onClick={() => setActivePage("My Courses")}
+                      onClick={() => {
+  setSelectedCourse(course.courseName);
+  setActivePage("My Courses");
+}}
                       className="flex items-center justify-center gap-2 rounded-xl bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-700 hover:bg-violet-100"
                     >
                       <Play size={15} /> Continue
                     </button>
 
                   </div>
-                ))}
+  );
+})}
 
               </div>
             </div>
@@ -1123,7 +1420,23 @@ const averageScore =
                       </span>
 
                       <button
-                        onClick={() => setActivePage("My Courses")}
+                        onClick={() => {
+  const courseMap = {
+    "CSS Practice": "CSS Fundamentals",
+    "HTML Practice": "HTML Fundamentals",
+    "React Practice": "React Development",
+    "JavaScript Practice": "JavaScript",
+  };
+
+  const courseName = courseMap[item.title];
+
+  if (courseName && courseDetails[courseName]) {
+    setSelectedCourse(courseName);
+    setSelectedLesson(null);
+    setLessonContentOpen(false);
+    setActivePage("My Courses");
+  }
+}}
                         className="text-sm font-semibold text-violet-600"
                       >
                         Explore <ChevronRight size={15} className="inline" />
@@ -1142,15 +1455,31 @@ const averageScore =
                 </div>
 
                 <p className="mt-3 text-2xl font-bold text-emerald-800">
-                  1.5 / 2 Hours
+                  {studyHours.toFixed(1)} / 2 Hours
                 </p>
 
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-emerald-100">
-                  <div className="h-full w-3/4 rounded-full bg-emerald-500" />
+                  <div
+  className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+  style={{ width: `${Math.min((studyHours / 2) * 100, 100)}%` }}
+/>
                 </div>
-
+<button
+  onClick={() => {
+    const updated = Math.min(studyHours + 0.5, 2);
+    setStudyHours(updated);
+    localStorage.setItem("studyHours", updated);
+  }}
+  className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 text-white"
+>
+  + 30 Minutes
+</button>
                 <p className="mt-3 text-xs text-emerald-700">
-                  Great progress! Keep learning.
+                  {studyHours >= 2
+  ? "Daily study goal completed! Excellent work!"
+  : studyHours > 0
+  ? "Good progress! Keep going!"
+  : "Start studying to achieve your daily goal!"}
                 </p>
               </div>
 
